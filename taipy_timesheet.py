@@ -848,5 +848,11 @@ if __name__ == "__main__":
         exit(1)
     
     print("Starting GUI...")
-    gui = Gui(pages=pages)
-    gui.run(title="Biweekly Timesheet Calculator", port=5000, debug=True, on_init=on_init)
+    import os
+from taipy.gui import Gui
+
+gui = Gui(pages=pages)
+
+# Use Render-provided port or default to 5000
+port = int(os.environ.get("PORT", 5000))
+gui.run(server_host="0.0.0.0", server_port=port, title="Biweekly Timesheet Calculator", debug=True, on_init=on_init)
