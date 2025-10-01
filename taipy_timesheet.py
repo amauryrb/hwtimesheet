@@ -839,6 +839,9 @@ pages = {
 }
 
 # ---- Main execution ----
+import os
+from taipy.gui import Gui
+
 if __name__ == "__main__":
     print("Starting Biweekly Timesheet Calculator...")
     print("Pay periods: Aug 10-23, Aug 24-Sep 6, etc. (14-day biweekly)")
@@ -848,11 +851,15 @@ if __name__ == "__main__":
         exit(1)
     
     print("Starting GUI...")
-    import os
-from taipy.gui import Gui
-
-gui = Gui(pages=pages)
-
-# Use Render-provided port or default to 5000
-port = int(os.environ.get("PORT", 5000))
-gui.run(server_host="0.0.0.0", server_port=port, title="Biweekly Timesheet Calculator", debug=True, on_init=on_init)
+    gui = Gui(pages=pages)
+    
+    # Use Render-provided port or fallback to 5000 locally
+    port = int(os.environ.get("PORT", 5000))
+    
+    gui.run(
+        server_host="0.0.0.0",  # expose externally
+        server_port=port,
+        title="Biweekly Timesheet Calculator",
+        debug=True,
+        on_init=on_init
+    )
