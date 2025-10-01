@@ -104,7 +104,7 @@ def check_database_structure():
         return False
 
 def get_saved_shifts():
-    """Get saved shifts with Edit and Delete action buttons"""
+    """Get saved shifts with ID for deletion"""
     try:
         conn = sqlite3.connect("timesheet.db")
         cursor = conn.cursor()
@@ -129,15 +129,6 @@ def get_saved_shifts():
         
         df = pd.read_sql_query(query, conn)
         conn.close()
-        
-        # Add Edit and Delete action columns
-        if not df.empty:
-            df['Edit'] = df['id'].apply(lambda x: f"✏️ Edit_{x}")
-            df['Delete'] = df['id'].apply(lambda x: f"🗑️ Delete_{x}")
-        else:
-            df['Edit'] = []
-            df['Delete'] = []
-        
         print(f"Loaded {len(df)} shifts from database")
         return df
         
@@ -145,7 +136,7 @@ def get_saved_shifts():
         print(f"Error loading shifts: {e}")
         return pd.DataFrame({
             'id': [], 'date': [], 'start_time': [], 'end_time': [], 
-            'per_diem': [], 'site_bonus': [], 'Edit': [], 'Delete': []
+            'per_diem': [], 'site_bonus': []
         })
 
 def save_shift_to_db(shift_date, start_time, end_time, per_diem, site_bonus):
@@ -163,50 +154,6 @@ def save_shift_to_db(shift_date, start_time, end_time, per_diem, site_bonus):
     except Exception as e:
         print(f"Save error: {e}")
         return False
-
-def update_shift_in_db(shift_id, shift_date, start_time, end_time, per_diem, site_bonus):
-    """Update existing shift in database"""
-    try:
-        conn = sqlite3.connect("timesheet.db")
-        cursor = conn.cursor()
-        cursor.execute("""
-            UPDATE shifts 
-            SET date = ?, start_time = ?, end_time = ?, per_diem = ?, site_bonus = ?
-            WHERE id = ?
-        """, (str(shift_date), start_time, end_time, per_diem, 1 if site_bonus else 0, shift_id))
-        conn.commit()
-        affected_rows = cursor.rowcount
-        conn.close()
-        return affected_rows > 0
-    except Exception as e:
-        print(f"Update error: {e}")
-        return False
-
-def get_shift_by_id(shift_id):
-    """Get a specific shift by ID for editing"""
-    try:
-        conn = sqlite3.connect("timesheet.db")
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT id, date, start_time, end_time, per_diem, site_bonus
-            FROM shifts WHERE id = ?
-        """, (shift_id,))
-        result = cursor.fetchone()
-        conn.close()
-        
-        if result:
-            return {
-                'id': result[0],
-                'date': result[1],
-                'start_time': result[2],
-                'end_time': result[3],
-                'per_diem': result[4],
-                'site_bonus': bool(result[5])
-            }
-        return None
-    except Exception as e:
-        print(f"Get shift error: {e}")
-        return None
 
 def delete_shift_from_db(shift_id):
     """Delete a shift from the database by ID"""
@@ -293,6 +240,7 @@ def calc_pay_period(week1_hours, week2_hours, week1_per_diem, week2_per_diem,
     
     return total_taxable_gross, total_per_diem, after_tax
 
+
 def calculate_hours_from_timesheet(start_time, end_time):
     """Calculate hours worked from start and end time"""
     try:
@@ -327,19 +275,13 @@ def analyze_timesheet_by_periods():
                     'week1_hours': 0, 'week2_hours': 0,
                     'week1_per_diem': [], 'week2_per_diem': [],
                     'week1_site_bonus_days': 0, 'week2_site_bonus_days': 0,
-                    'period_label': 'No data',
-                    'hours': 0,
-                    'days': 0,
-                    'site_bonus_days': 0
+                    'period_label': 'No data'
                 },
                 'previous_period': {
                     'week1_hours': 0, 'week2_hours': 0,
                     'week1_per_diem': [], 'week2_per_diem': [],
                     'week1_site_bonus_days': 0, 'week2_site_bonus_days': 0,
-                    'period_label': 'No data',
-                    'hours': 0,
-                    'days': 0,
-                    'site_bonus_days': 0
+                    'period_label': 'No data'
                 },
                 'recent_shifts': df,
                 'total_shifts': 0
@@ -438,19 +380,13 @@ def analyze_timesheet_by_periods():
                 'week1_hours': 0, 'week2_hours': 0,
                 'week1_per_diem': [], 'week2_per_diem': [],
                 'week1_site_bonus_days': 0, 'week2_site_bonus_days': 0,
-                'period_label': 'Error',
-                'hours': 0,
-                'days': 0,
-                'site_bonus_days': 0
+                'period_label': 'Error'
             },
             'previous_period': {
                 'week1_hours': 0, 'week2_hours': 0,
                 'week1_per_diem': [], 'week2_per_diem': [],
                 'week1_site_bonus_days': 0, 'week2_site_bonus_days': 0,
-                'period_label': 'Error',
-                'hours': 0,
-                'days': 0,
-                'site_bonus_days': 0
+                'period_label': 'Error'
             },
             'recent_shifts': pd.DataFrame(),
             'total_shifts': 0
@@ -528,16 +464,12 @@ site_bonus = False
 message = "Ready to enter shift data"
 delete_shift_id = ""
 
-# Edit mode variables
-edit_mode = False
-editing_shift_id = None
-
 PER_DIEM_OPTIONS = ["None", "Breakfast Only", "Breakfast + Lunch", 
                     "Breakfast + Lunch + Dinner", "Lunch + Dinner", "Dinner Only"]
 
 saved_shifts = pd.DataFrame({
     'id': [], 'date': [], 'start_time': [], 'end_time': [], 
-    'per_diem': [], 'site_bonus': [], 'Edit': [], 'Delete': []
+    'per_diem': [], 'site_bonus': []
 })
 
 # Calculator settings
@@ -552,94 +484,21 @@ total_pay_summary = ""
 monthly_projections = pd.DataFrame()
 
 # ---- Functions ----
-def on_table_action(state, var_name, action, payload):
-    """Handle table button clicks for Edit and Delete"""
-    print(f"Table action: {action}, Payload: {payload}")
-    
-    if action.startswith("Edit_"):
-        shift_id = int(action.split("_")[1])
-        edit_shift(state, shift_id)
-    elif action.startswith("Delete_"):
-        shift_id = int(action.split("_")[1])
-        delete_shift_by_id(state, shift_id)
-
-def edit_shift(state, shift_id):
-    """Load shift data into form for editing"""
-    shift_data = get_shift_by_id(shift_id)
-    
-    if shift_data:
-        state.selected_day = datetime.strptime(shift_data['date'], "%Y-%m-%d").date()
-        state.start_time = shift_data['start_time']
-        state.end_time = shift_data['end_time']
-        state.per_diem = shift_data['per_diem']
-        state.site_bonus = shift_data['site_bonus']
+def save_shift(state):
+    """Save shift and auto-calculate pay"""
+    if save_shift_to_db(state.selected_day, state.start_time.strip(), 
+                       state.end_time.strip(), state.per_diem, state.site_bonus):
         
-        state.edit_mode = True
-        state.editing_shift_id = shift_id
-        state.message = f"📝 Editing shift ID {shift_id} - Make changes and click Update"
-        notify(state, "info", f"Loaded shift {shift_id} for editing")
-    else:
-        state.message = f"❌ Shift ID {shift_id} not found"
-        notify(state, "error", f"Shift {shift_id} not found")
-
-def delete_shift_by_id(state, shift_id):
-    """Delete a specific shift by ID"""
-    if delete_shift_from_db(shift_id):
         new_shifts = get_saved_shifts()
         state.saved_shifts = new_shifts
+        
         update_pay_calculations(state)
         
-        state.message = f"✅ Shift ID {shift_id} deleted successfully"
-        notify(state, "success", f"Shift {shift_id} deleted!")
+        state.message = f"✅ Shift saved and pay updated for {state.selected_day}"
+        notify(state, "success", "Shift saved and pay calculated!")
     else:
-        state.message = f"❌ Shift ID {shift_id} not found"
-        notify(state, "error", f"Shift {shift_id} not found")
-
-def save_or_update_shift(state):
-    """Save new shift or update existing shift"""
-    if state.edit_mode and state.editing_shift_id:
-        # Update existing shift
-        if update_shift_in_db(state.editing_shift_id, state.selected_day, 
-                             state.start_time.strip(), state.end_time.strip(), 
-                             state.per_diem, state.site_bonus):
-            
-            new_shifts = get_saved_shifts()
-            state.saved_shifts = new_shifts
-            update_pay_calculations(state)
-            
-            state.message = f"✅ Shift ID {state.editing_shift_id} updated successfully"
-            state.edit_mode = False
-            state.editing_shift_id = None
-            notify(state, "success", "Shift updated!")
-        else:
-            state.message = "❌ Failed to update shift"
-            notify(state, "error", "Update failed")
-    else:
-        # Save new shift
-        if save_shift_to_db(state.selected_day, state.start_time.strip(), 
-                           state.end_time.strip(), state.per_diem, state.site_bonus):
-            
-            new_shifts = get_saved_shifts()
-            state.saved_shifts = new_shifts
-            update_pay_calculations(state)
-            
-            state.message = f"✅ Shift saved for {state.selected_day}"
-            notify(state, "success", "Shift saved!")
-        else:
-            state.message = "❌ Failed to save shift"
-            notify(state, "error", "Save failed")
-
-def cancel_edit(state):
-    """Cancel edit mode and clear form"""
-    state.edit_mode = False
-    state.editing_shift_id = None
-    state.selected_day = date.today()
-    state.start_time = "08:00"
-    state.end_time = "17:00"
-    state.per_diem = "None"
-    state.site_bonus = False
-    state.message = "✅ Edit cancelled - Ready for new entry"
-    notify(state, "info", "Edit cancelled")
+        state.message = "❌ Failed to save shift"
+        notify(state, "error", "Database save failed")
 
 def delete_selected_shift(state):
     """Delete a specific shift by ID"""
@@ -736,6 +595,7 @@ def update_pay_calculations(state):
         current_for_projection, state.base_weekly, state.site_bonus_day, tax_rate_decimal
     )
 
+
 def on_init(state):
     """Initialize app and calculate initial pay"""
     print("Initializing app...")
@@ -748,7 +608,7 @@ def on_init(state):
     
     print("App initialized with biweekly pay period calculations")
 
-# ---- Multi-page UI with Edit Functionality ----
+# ---- Multi-page UI ----
 timesheet_page = """
 <|navbar|>
 
@@ -756,7 +616,7 @@ timesheet_page = """
 
 Enter your shift details. Pay calculated by biweekly periods (Aug 10-23, etc.)
 
-## {("Edit" if edit_mode else "Add")} Shift
+## Add New Shift
 
 Date:
 <|{selected_day}|date|>
@@ -773,9 +633,7 @@ Per Diem:
 Site Bonus:
 <|{site_bonus}|toggle|>
 
-<|{("Update Shift" if edit_mode else "Save Shift")}|button|on_action=save_or_update_shift|>
-
-{%if edit_mode%}<|Cancel Edit|button|on_action=cancel_edit|>{%endif%}
+<|Save Shift|button|on_action=save_shift|>
 
 <|{message}|text|>
 
@@ -783,7 +641,7 @@ Site Bonus:
 
 ## Your Shifts
 
-<|{saved_shifts}|table|on_action=on_table_action|>
+<|{saved_shifts}|table|>
 
 ## Delete Shifts
 
