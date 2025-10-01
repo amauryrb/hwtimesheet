@@ -860,6 +860,6 @@ if __name__ == "__main__":
         server_host="0.0.0.0",  # expose externally
         server_port=port,
         title="Biweekly Timesheet Calculator",
-        debug=True,
+        debug=False,
         on_init=on_init
     )
