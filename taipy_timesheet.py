@@ -854,11 +854,11 @@ if __name__ == "__main__":
     gui = Gui(pages=pages)
     
     # Use Render-provided port or fallback to 5000 locally
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 10000))
     
     gui.run(
-        server_host="0.0.0.0",  # expose externally
-        server_port=port,
+        host="0.0.0.0",  # expose externally
+        port=port,
         title="Biweekly Timesheet Calculator",
         debug=False,
         on_init=on_init
