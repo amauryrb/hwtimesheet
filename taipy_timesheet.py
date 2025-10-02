@@ -182,6 +182,23 @@ def delete_all_shifts():
     except Exception as e:
         print(f"Delete all error: {e}")
         return 0
+    
+def bulk_add_shifts(state):
+    if state.bulk_end_date < state.bulk_start_date:
+        state.bulk_shift_message = "❌ End date must be after start date"
+        notify(state, "error", state.bulk_shift_message)
+        return
+    count = 0
+    curr = state.bulk_start_date
+    while curr <= state.bulk_end_date:
+        if save_shift_to_db(curr, state.start_time.strip(), state.end_time.strip(), state.per_diem, state.site_bonus):
+            count += 1
+        curr += timedelta(days=1)
+    state.saved_shifts = get_saved_shifts()
+    update_pay_calculations(state)
+    state.bulk_shift_message = f"✅ Bulk added {count} shifts from {state.bulk_start_date} to {state.bulk_end_date}"
+    notify(state, "success", state.bulk_shift_message)
+
 
 # ---- Calculator Logic (FIXED for biweekly) ----
 PER_DIEM_RATES = {
@@ -456,6 +473,9 @@ def calculate_monthly_projections(current_data, base_weekly, site_bonus_day, tax
                        columns=['Scenario', 'Projected Monthly Income'])
 
 # ---- App State Variables ----
+bulk_start_date = date.today()
+bulk_end_date = date.today()
+bulk_shift_message = ""
 selected_day = date.today()
 start_time = "08:00"
 end_time = "17:00"
@@ -636,6 +656,17 @@ Site Bonus:
 <|Save Shift|button|on_action=save_shift|>
 
 <|{message}|text|>
+
+## Bulk Entry
+
+Start Date: <|{bulk_start_date}|date|>
+End Date: <|{bulk_end_date}|date|>
+Start Time: <|{start_time}|input|>
+End Time: <|{end_time}|input|>
+Per Diem: <|{per_diem}|selector|lov={PER_DIEM_OPTIONS}|dropdown|>
+Site Bonus: <|{site_bonus}|toggle|>
+<|Bulk Add Shifts|button|on_action=bulk_add_shifts|>
+<|{bulk_shift_message}|text|>
 
 ---
 
